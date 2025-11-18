@@ -39,6 +39,13 @@ inputs = {
   name               = local.cluster_name
   kubernetes_version = local.cluster_version
 
+  # --- REQUIRED FIX ---
+  kubernetes_network_config = {
+    ip_family        = "ipv4"
+    service_ipv4_cidr = "172.20.0.0/16"
+    pod_ipv4_cidr     = "10.244.0.0/16"
+  }
+
   # VPC
   vpc_id                   = dependency.vpc.outputs.vpc_id
   subnet_ids               = dependency.vpc.outputs.private_subnet_ids
@@ -57,30 +64,6 @@ inputs = {
   iam_role_additional_policies = {
     AmazonEKSVPCResourceController = "arn:aws:iam::aws:policy/AmazonEKSVPCResourceController"
   }
-
-  # Cluster SG rules
-  security_group_additional_rules = {
-    admin_access = {
-      description = "Access to Kubernetes API from VPC"
-      cidr_blocks = ["10.0.0.0/16"]
-      protocol    = "tcp"
-      from_port   = 443
-      to_port     = 443
-      type        = "ingress"
-    }
-
-    internet = {
-      description = "Allow cluster egress access to the Internet"
-      cidr_blocks = ["0.0.0.0/0"]
-      protocol    = "-1"
-      from_port   = 0
-      to_port     = 0
-      type        = "egress"
-    }
-  }
-
-  # Service CIDR
-  service_ipv4_cidr = "172.20.0.0/16"
 
   # Logging
   enabled_cluster_log_types              = ["api", "audit", "authenticator", "controllerManager", "scheduler"]
@@ -113,9 +96,7 @@ inputs = {
     vpc-cni = {
       most_recent       = true
       resolve_conflicts = "OVERWRITE"
-
-      # IAM role for VPC CNI ADD-ON
-      addon_role_arn = "arn:aws:iam::074643188723:role/eks-addon-manager-role"
+      addon_role_arn    = "arn:aws:iam::074643188723:role/eks-addon-manager-role"
     }
 
     eks-pod-identity-agent = {
@@ -124,18 +105,16 @@ inputs = {
     }
   }
 
-  # Node Security Group Tags
   node_security_group_tags = {
     Name = "${local.cluster_name}-node-sg"
   }
 
-  # EKS Managed Node Groups
   eks_managed_node_groups = {
     system_base = {
       name           = "system-base"
 
-      ami_type       = "AL2023_ARM_64_STANDARD"
-      instance_types = ["t4g.medium"]
+      ami_type       = "AL2023_x86_64_STANDARD"
+      instance_types = ["t3.medium"]
 
       min_size     = 1
       max_size     = 1
@@ -172,25 +151,10 @@ inputs = {
 
       metadata_options = {
         http_endpoint               = "enabled"
-        http_tokens                 = "required"
-        http_put_response_hop_limit = 2
+        http_tokens                 = "optional"
+        http_put_response_hop_limit = 3
         instance_metadata_tags      = "disabled"
       }
-
-      cloudinit_pre_nodeadm = [
-        {
-          content_type = "application/node.eks.aws"
-          content      = <<-EOT
-            ---
-            apiVersion: node.eks.aws/v1alpha1
-            kind: NodeConfig
-            spec:
-              kubelet:
-                flags:
-                - --node-labels=node.kubernetes.io/role=system-base
-          EOT
-        }
-      ]
 
       instance_refresh = {}
 
